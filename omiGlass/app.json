@@ -3,13 +3,16 @@
     "name": "Dude where’s my car?",
     "slug": "find-anything",
     "version": "1.0.0",
+    "scheme": "omiglass",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.basedhardware.find",
@@ -26,14 +29,37 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.basedhardware.find"
+      "package": "com.basedhardware.find",
+      "permissions": [
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": ["react-native-ble-plx"],
+    "plugins": [
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "modes": [
+            "central"
+          ],
+          "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to connect to the OMI Glass device."
+        }
+      ]
+    ],
     "experiments": {
       "baseUrl": "/llama3-hackaton"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "23c224ca-863e-4518-b023-b542afd2608b"
+      }
     }
   }
 }
