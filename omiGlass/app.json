@@ -10,7 +10,9 @@
     "splash": {
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.basedhardware.find",
@@ -31,7 +33,9 @@
       "permissions": [
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN"
       ]
     },
     "web": {
@@ -42,13 +46,20 @@
         "react-native-ble-plx",
         {
           "isBackgroundEnabled": false,
-          "modes": ["central"],
+          "modes": [
+            "central"
+          ],
           "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to connect to the OMI Glass device."
         }
       ]
     ],
     "experiments": {
       "baseUrl": "/llama3-hackaton"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "23c224ca-863e-4518-b023-b542afd2608b"
+      }
     }
   }
 }
