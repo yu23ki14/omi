@@ -155,21 +155,39 @@ class NativeBleDevice implements BleDevice {
     }
 }
 
+async function finishConnect(device: Device): Promise<NativeBleDevice> {
+    try {
+        await device.requestMTU(MTU);
+    } catch (err) {
+        // iOS negotiates MTU automatically and rejects manual requests;
+        // Android may also fail on some stacks. Log and continue.
+        console.warn('requestMTU failed (continuing)', err);
+    }
+    await device.discoverAllServicesAndCharacteristics();
+    return new NativeBleDevice(device);
+}
+
 class NativeBleClient implements BleClient {
     async requestDevice(opts: RequestDeviceOptions): Promise<BleDevice> {
         await requestAndroidPermissions();
         await waitForPoweredOn(5000);
         const found = await scanForDevice(opts.name, SCAN_TIMEOUT_MS);
         const connected = await found.connect();
+        return finishConnect(connected);
+    }
+
+    async tryAutoConnect(_opts: RequestDeviceOptions, deviceId: string): Promise<BleDevice | null> {
         try {
-            await connected.requestMTU(MTU);
-        } catch (err) {
-            // iOS negotiates MTU automatically and rejects manual requests;
-            // Android may also fail on some stacks. Log and continue.
-            console.warn('requestMTU failed (continuing)', err);
+            await requestAndroidPermissions();
+            await waitForPoweredOn(5000);
+            // ble-plx's connectToDevice goes straight to GATT connect without
+            // scanning, so this is a fast no-op when the device isn't nearby
+            // and a few-hundred-ms reconnect when it is.
+            const connected = await manager().connectToDevice(deviceId, { timeout: 5000 });
+            return await finishConnect(connected);
+        } catch {
+            return null;
         }
-        await connected.discoverAllServicesAndCharacteristics();
-        return new NativeBleDevice(connected);
     }
 }
 

@@ -17,6 +17,9 @@ export const bleClient: BleClient = {
     async requestDevice(opts) {
         return (await getClient()).requestDevice(opts);
     },
+    async tryAutoConnect(opts, deviceId) {
+        return (await getClient()).tryAutoConnect(opts, deviceId);
+    },
 };
 
 export type { BleCharacteristic, BleDevice, BleService, RequestDeviceOptions } from './types';

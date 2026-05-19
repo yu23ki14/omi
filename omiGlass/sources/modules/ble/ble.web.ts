@@ -82,6 +82,25 @@ class WebBleClient implements BleClient {
         const server = await device.gatt!.connect();
         return new WebBleDevice(device, server);
     }
+
+    async tryAutoConnect(_opts: RequestDeviceOptions, deviceId: string): Promise<BleDevice | null> {
+        // navigator.bluetooth.getDevices() returns devices the origin has
+        // already been granted permission for. Only available in Chrome
+        // 117+; older browsers return undefined.
+        const getDevices = (navigator.bluetooth as unknown as {
+            getDevices?: () => Promise<BluetoothDevice[]>;
+        }).getDevices;
+        if (!getDevices) return null;
+        try {
+            const devices = await getDevices.call(navigator.bluetooth);
+            const target = devices.find((d) => d.id === deviceId);
+            if (!target?.gatt) return null;
+            const server = await target.gatt.connect();
+            return new WebBleDevice(target, server);
+        } catch {
+            return null;
+        }
+    }
 }
 
 export const bleClient: BleClient = new WebBleClient();

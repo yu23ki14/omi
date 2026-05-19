@@ -31,4 +31,10 @@ export interface RequestDeviceOptions {
 /** Implemented by ble.web.ts and ble.native.ts. */
 export interface BleClient {
     requestDevice(opts: RequestDeviceOptions): Promise<BleDevice>;
+    /**
+     * Try to connect to a previously paired device without prompting the
+     * user. Returns null if the device isn't reachable or the platform
+     * can't enumerate prior permissions.
+     */
+    tryAutoConnect(opts: RequestDeviceOptions, deviceId: string): Promise<BleDevice | null>;
 }

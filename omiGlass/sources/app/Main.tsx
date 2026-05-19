@@ -4,37 +4,26 @@ import { RoundButton } from './components/RoundButton';
 import { Theme } from './components/theme';
 import { useDevice } from '../modules/useDevice';
 import { DeviceView } from './DeviceView';
-import { startAudio } from '../modules/openai';
 
 export const Main = React.memo(() => {
+    const [device, connectDevice, status] = useDevice();
 
-    const [device, connectDevice, isAutoConnecting] = useDevice();
-    const [isConnecting, setIsConnecting] = React.useState(false);
-    
-    // Handle connection attempt
-    const handleConnect = React.useCallback(async () => {
-        setIsConnecting(true);
-        try {
-            await connectDevice();
-        } finally {
-            setIsConnecting(false);
-        }
-    }, [connectDevice]);
-    
+    let statusText: string | null = null;
+    if (status.isAutoConnecting) statusText = 'Reconnecting to OMI Glass...';
+    else if (status.isConnecting) statusText = 'Connecting to OMI Glass...';
+
     return (
         <SafeAreaView style={styles.container}>
             {!device && (
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', alignSelf: 'center' }}>
-                    {isConnecting ? (
-                        <Text style={styles.statusText}>Connecting to OpenGlass...</Text>
+                    {statusText ? (
+                        <Text style={styles.statusText}>{statusText}</Text>
                     ) : (
-                        <RoundButton title="Connect to the device" action={handleConnect} />
+                        <RoundButton title="Connect to the device" action={connectDevice} />
                     )}
                 </View>
             )}
-            {device && (
-                <DeviceView device={device} />
-            )}
+            {device && <DeviceView device={device} />}
         </SafeAreaView>
     );
 });
