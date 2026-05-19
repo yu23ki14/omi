@@ -1,20 +1,12 @@
-import { KnownModel, ollamaInference } from "../modules/ollama";
-import { groqRequest } from "../modules/groq-llama3";
+import { groqRequest, groqVisionRequest } from "../modules/groq-llama3";
 import { gptRequest } from "../modules/openai";
 
 
-export async function imageDescription(src: Uint8Array, model: KnownModel = 'moondream:1.8b-v2-fp16'): Promise<string> {
-    return ollamaInference({
-        model: model,
-        messages: [{
-            role: 'system',
-            content: 'You are a very advanced model and your task is to describe the image as precisely as possible. Transcribe any text you see.'
-        }, {
-            role: 'user',
-            content: 'Describe the scene',
-            images: [src],
-        }]
-    });
+export async function imageDescription(src: Uint8Array): Promise<string> {
+    return groqVisionRequest(
+        'Describe the scene as precisely as possible. Transcribe any text you see.',
+        src,
+    );
 }
 
 export async function llamaFind(question: string, images: string): Promise<string> {
