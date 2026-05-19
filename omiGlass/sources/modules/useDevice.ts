@@ -1,73 +1,33 @@
 import * as React from 'react';
+import { bleClient, BleDevice } from './ble';
 
-const DEVICE_STORAGE_KEY = 'openglassDeviceId';
+const OMI_SERVICE_UUID = '19b10000-e8f2-537e-4f6c-d104768a1214';
+const DEVICE_INFO_SERVICE_UUID = '0000180a-0000-1000-8000-00805f9b34fb';
 
-export function useDevice(): [BluetoothRemoteGATTServer | null, () => Promise<void>, boolean] {
+export function useDevice(): [BleDevice | null, () => Promise<void>, boolean] {
+    const [device, setDevice] = React.useState<BleDevice | null>(null);
+    const [isConnecting, setIsConnecting] = React.useState<boolean>(false);
 
-    // Create state
-    let deviceRef = React.useRef<BluetoothRemoteGATTServer | null>(null);
-    let [device, setDevice] = React.useState<BluetoothRemoteGATTServer | null>(null);
-    let [isAutoConnecting, setIsAutoConnecting] = React.useState<boolean>(false);
-
-    // Setup disconnect handler
-    const setupDisconnectHandler = (connectedDevice: BluetoothDevice) => {
-        connectedDevice.ongattserverdisconnected = async () => {
-            console.log('Device disconnected, attempting to reconnect...');
-            
-            // Attempt to reconnect
-            setIsAutoConnecting(true);
-            try {
-                if (connectedDevice.gatt) {
-                    const gatt = await connectedDevice.gatt.connect();
-                    deviceRef.current = gatt;
-                    setDevice(gatt);
-                    console.log('Reconnection successful!');
-                }
-            } catch (err) {
-                console.error('Reconnection failed:', err);
-                deviceRef.current = null;
-                setDevice(null);
-            } finally {
-                setIsAutoConnecting(false);
-            }
-        };
-    };
-
-    // Create callback
     const doConnect = React.useCallback(async () => {
+        setIsConnecting(true);
         try {
-            // Connect to device
             console.log('Requesting device connection...');
-            let connected = await navigator.bluetooth.requestDevice({
-                filters: [{ name: 'OMI Glass' }],
-                optionalServices: [
-                    '19B10000-E8F2-537E-4F6C-D104768A1214'.toLowerCase(),
-                    'device_information',
-                ],
+            const d = await bleClient.requestDevice({
+                name: 'OMI Glass',
+                services: [OMI_SERVICE_UUID, DEVICE_INFO_SERVICE_UUID],
             });
-
-            // Store device ID for future reconnections
-            console.log('Storing device ID:', connected.id);
-            localStorage.setItem(DEVICE_STORAGE_KEY, connected.id);
-
-            // Connect to gatt
-            console.log('Connecting to GATT server...');
-            let gatt: BluetoothRemoteGATTServer = await connected.gatt!.connect();
-            console.log('Connected successfully!');
-
-            // Update state
-            deviceRef.current = gatt;
-            setDevice(gatt);
-            
-            // Setup disconnect handler for auto-reconnect
-            setupDisconnectHandler(connected);
-            
+            console.log('Connected successfully!', d.id);
+            d.onDisconnect(() => {
+                console.log('Device disconnected');
+                setDevice(null);
+            });
+            setDevice(d);
         } catch (e) {
-            // Handle error
             console.error('Connection failed:', e);
+        } finally {
+            setIsConnecting(false);
         }
     }, []);
 
-    // Return
-    return [device, doConnect, isAutoConnecting];
+    return [device, doConnect, isConnecting];
 }
