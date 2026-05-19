@@ -19,6 +19,7 @@
     "expo": "^55.0.0",
     "expo-file-system": "~55.0.0",
     "ollama": "^0.5.1",
+    "opus-decoder": "^0.7.11",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-native": "0.83.6",
