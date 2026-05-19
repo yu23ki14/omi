@@ -1,17 +1,25 @@
-import { OpusDecoder } from 'opus-decoder';
+// opus-decoder is a WASM module that pulls in Worker / WebAssembly setup
+// at module-load time. React Native's Hermes runtime doesn't provide
+// Worker, so importing it eagerly crashes the app even when we never
+// call the decoder. Keep this import dynamic so opus-decoder is only
+// loaded when opusFramesToWav() is actually invoked — which the call
+// site (useTranscripts) guards behind Platform.OS === 'web'.
+type LoadedDecoder = {
+    decodeFrames(frames: Uint8Array[]): { channelData: Float32Array[] };
+};
 
 const SAMPLE_RATE = 16000;
 const CHANNELS = 1;
 
-type Decoder = OpusDecoder<typeof SAMPLE_RATE>;
-let decoderPromise: Promise<Decoder> | null = null;
+let decoderPromise: Promise<LoadedDecoder> | null = null;
 
-async function getDecoder(): Promise<Decoder> {
+async function getDecoder(): Promise<LoadedDecoder> {
     if (!decoderPromise) {
         decoderPromise = (async () => {
+            const { OpusDecoder } = await import('opus-decoder');
             const decoder = new OpusDecoder({ sampleRate: SAMPLE_RATE, channels: CHANNELS });
             await decoder.ready;
-            return decoder;
+            return decoder as LoadedDecoder;
         })();
     }
     return decoderPromise;
