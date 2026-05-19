@@ -1,5 +1,6 @@
 import axios from "axios";
 import { keys } from "../keys";
+import { toBase64Image } from "../utils/base64";
 
 const headers = {
     'Authorization': `Bearer ${keys.groq}`
@@ -20,6 +21,27 @@ export async function groqRequest(systemPrompt: string, userPrompt: string) {
         console.error("Error in groqRequest:", error);
         return null; // or handle error differently
     }
+}
+
+export async function groqVisionRequest(prompt: string, image: Uint8Array): Promise<string> {
+    const dataUrl = toBase64Image(image);
+    const response = await axios.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+            model: "meta-llama/llama-4-scout-17b-16e-instruct",
+            messages: [
+                {
+                    role: "user",
+                    content: [
+                        { type: "text", text: prompt },
+                        { type: "image_url", image_url: { url: dataUrl } },
+                    ],
+                },
+            ],
+        },
+        { headers },
+    );
+    return response.data.choices[0].message.content ?? '';
 }
 
 
