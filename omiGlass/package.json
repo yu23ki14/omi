@@ -38,5 +38,6 @@
     "ts-node": "^10.9.2",
     "typescript": "~5.3.3"
   },
-  "private": true
+  "private": true,
+  "packageManager": "pnpm@10.18.3"
 }
