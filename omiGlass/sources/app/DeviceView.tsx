@@ -21,6 +21,8 @@ const FRAMES_PER_SEGMENT = 500;
 const AUDIO_CODEC_ID_OPUS = 21;
 
 type Transcript = { text: string; timestamp: number };
+type Rotation = '0' | '90' | '180' | '270';
+type Photo = { data: Uint8Array; timestamp: number; rotation: Rotation };
 
 function compareVersions(v1: string, v2: string): number {
     const parts1 = v1.split('.').map(Number);
@@ -36,7 +38,7 @@ function compareVersions(v1: string, v2: string): number {
 }
 
 function usePhotos(device: BleDevice) {
-    const [photos, setPhotos] = React.useState<Array<{ data: Uint8Array; timestamp: number }>>([]);
+    const [photos, setPhotos] = React.useState<Photo[]>([]);
     const [subscribed, setSubscribed] = React.useState<boolean>(false);
 
     React.useEffect(() => {
@@ -78,7 +80,7 @@ function usePhotos(device: BleDevice) {
                     if (id === null) {
                         console.log('Photo received', buffer);
                         const timestamp = Date.now();
-                        let rotation: '0' | '90' | '180' | '270' = '180';
+                        let rotation: Rotation = '180';
                         if (newRotationLogic) {
                             rotation = '0';
                             if (orientation === 1) rotation = '90';
@@ -87,7 +89,15 @@ function usePhotos(device: BleDevice) {
                         }
                         rotateImage(buffer, rotation).then((rotated) => {
                             if (cancelled) return;
-                            setPhotos((p) => [...p, { data: rotated, timestamp }]);
+                            // rotateImage bakes rotation into pixels on web; on
+                            // native it's a no-op so we have to apply the
+                            // rotation at render time instead.
+                            const displayRotation: Rotation =
+                                Platform.OS === 'web' ? '0' : rotation;
+                            setPhotos((p) => [
+                                ...p,
+                                { data: rotated, timestamp, rotation: displayRotation },
+                            ]);
                         });
                         previousChunk = -1;
                         return;
@@ -241,7 +251,18 @@ export const DeviceView = React.memo((props: { device: BleDevice }) => {
                                 padding: 2,
                             }}
                         >
-                            <Image style={{ width: '100%', height: '100%', borderRadius: 5 }} source={{ uri: toBase64Image(photo.data) }} />
+                            <Image
+                                style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    borderRadius: 5,
+                                    transform:
+                                        photo.rotation === '0'
+                                            ? undefined
+                                            : [{ rotate: `${photo.rotation}deg` }],
+                                }}
+                                source={{ uri: toBase64Image(photo.data) }}
+                            />
                             {activePhotoIndex === (photos.length - 1 - index) && (
                                 <View style={{
                                     position: 'absolute',
