@@ -1,4 +1,12 @@
+import { Platform } from 'react-native';
+
 export function rotateImage(src: Uint8Array, angle: '0' | '90' | '180' | '270') {
+    // Canvas + <img> only exist on web. On native, hand back the raw JPEG
+    // bytes; the render layer can apply a CSS transform if the orientation
+    // metadata says the image is upside-down.
+    if (Platform.OS !== 'web') {
+        return Promise.resolve(src);
+    }
     return new Promise<Uint8Array>((resolve, reject) => {
         const img = new Image();
         const url = URL.createObjectURL(new Blob([src as BlobPart], { type: 'image/jpeg' }));
