@@ -152,12 +152,12 @@ Never block the event loop — it freezes health checks, HPA scaling, and all co
   - **Long-running pipelines must be async coordinators.** Each blocking step uses `await run_blocking(pool, fn)`, borrowing a thread only for that step. Never hold a thread pool slot across await points or for >60s.
   - **Pool assignment** (match work type to pool):
     - `critical_executor` (8w) — auth gates only: `_verify_ws_auth`, `validate_byok_websocket`, `check_rate_limit`, `is_hard_restricted`, session/code Redis ops in `auth.py`
-    - `db_executor` (16w) — Firestore/Redis CRUD, vector DB queries
-    - `llm_executor` (4w) — LLM API calls (`get_llm().invoke()`, `get_app_result()`, persona generation)
+    - `db_executor` (24w) — Firestore/Redis CRUD, vector DB queries
+    - `llm_executor` (6w) — LLM API calls (`get_llm().invoke()`, `get_app_result()`, persona generation)
     - `stripe_executor` (4w) — Stripe API calls
-    - `sync_executor` (12w) — sync endpoint pipeline work
-    - `postprocess_executor` (8w) — post-conversation processing, coordinator functions
-    - `storage_executor` (32w) — GCS uploads/downloads, audio chunk I/O
+    - `sync_executor` (16w) — sync endpoint pipeline work
+    - `postprocess_executor` (24w) — post-conversation processing, coordinator functions
+    - `storage_executor` (96w) — GCS uploads/downloads, audio chunk I/O
   - **Deadlock prevention — 4 rules:**
     1. **Worker threads are leaf operations only.** Never `.result()` on another pool from inside a worker thread. If pool A thread submits to pool B and calls `.result()`, and vice versa, both pools deadlock.
     2. **Orchestration stays in async code.** The async handler coordinates via `await run_blocking(pool, fn)` — sequentially or with `asyncio.gather`. The event loop never blocks, pools stay independent.
@@ -167,6 +167,20 @@ Never block the event loop — it freezes health checks, HPA scaling, and all co
   - **Pool observability:** `get_executor_metrics()` returns active count, queue depth, and utilization % for all pools. `log_executor_health()` runs every 60s, warns when any pool exceeds 70% utilization. Wired in `main.py` startup event.
 - **Lane 3 — Lint**: `python scripts/lint_async_blockers.py` catches `requests.*`, `time.sleep()`, `Thread().start()` in async code. Run before committing.
 - **Shutdown**: `close_all_clients()` + `shutdown_executors()` wired in `main.py` and `pusher/main.py`.
+
+## WebSocket Concurrency (Long-Lived Connections)
+
+WS handlers in `transcribe.py` and `pusher.py` manage 5-11 concurrent tasks per connection. Use `utils/async_tasks.py` utilities — never raw `asyncio.gather()` or bare `await receive_task`.
+
+- **Supervision**: `supervise_tasks()` wraps `asyncio.wait(FIRST_COMPLETED)` — detects both client disconnect and bg task crashes immediately. Classify tasks as finite (can complete during session) or lifetime (completion = session ending).
+- **Drain**: `drain_tasks()` cancels remaining bg tasks with bounded timeout, force-cancels stragglers via `asyncio.wait` (not `asyncio.gather`, which hangs if a task suppresses CancelledError).
+- **Fan-out**: `gather_safe()` replaces `asyncio.gather(return_exceptions=True)` — semaphore-bounded concurrency, per-item exception logging, typed `GatherResult[T]` return.
+- **Interruptible sleep**: `wait_for_event(event, seconds)` replaces `asyncio.sleep()` in polling loops — wakes instantly on disconnect via per-connection `asyncio.Event`. Never bare `asyncio.sleep()` in WS task loops.
+- **Receive timeouts**: every `websocket.receive()` must be wrapped in `asyncio.wait_for(..., timeout=WS_RECEIVE_TIMEOUT)`.
+- **Gauge placement**: `GAUGE.inc()` inside `try` body, `GAUGE.dec()` in `finally`. Init `bg_main_tasks = []` before `try`.
+- **Task naming**: `create_named_task()` for WS-scoped tasks (tracked in task_set for supervise/drain). Use `start_background_task()` from `utils/executors.py` for fire-and-forget work that outlives the handler.
+- **Prometheus labels**: static low-cardinality only (e.g. "pusher", "listen") — never uid/session_id.
+- **Module-level dicts**: add TTL-based eviction or cap size — they grow forever otherwise.
 
 ## Common Gotchas
 
