@@ -1,7 +1,7 @@
 export function rotateImage(src: Uint8Array, angle: '0' | '90' | '180' | '270') {
     return new Promise<Uint8Array>((resolve, reject) => {
         const img = new Image();
-        const url = URL.createObjectURL(new Blob([src], { type: 'image/jpeg' }));
+        const url = URL.createObjectURL(new Blob([src as BlobPart], { type: 'image/jpeg' }));
         img.onload = () => {
             if (angle === '0') {
                 URL.revokeObjectURL(url);
