@@ -46,12 +46,7 @@ Watch the [announcement video](https://x.com/kodjima33/status/191185246932972781
     ```bash
     git clone https://github.com/BasedHardware/omi.git
     cd omi/OmiGlass
-    npm install
-    ```
-
-    Or with yarn:
-    ```bash
-    yarn install
+    pnpm install
     ```
   </Step>
   <Step title="Configure API Keys">
@@ -73,12 +68,7 @@ Watch the [announcement video](https://x.com/kodjima33/status/191185246932972781
   </Step>
   <Step title="Start the Application">
     ```bash
-    npm start
-    ```
-
-    Or with yarn:
-    ```bash
-    yarn start
+    pnpm start
     ```
 
     <Tip>
