@@ -5,6 +5,14 @@ import { toBase64Image } from '../utils/base64';
 import { Agent } from '../agent/Agent';
 import { InvalidateSync } from '../utils/invalidateSync';
 import { textToSpeech } from '../modules/openai';
+import { opusFramesToWav } from '../modules/audio';
+import { transcribeWavWithGroq } from '../modules/whisper';
+
+// Opus frames @ 20ms each → 500 frames ≈ 10 seconds of audio per STT request.
+const FRAMES_PER_SEGMENT = 500;
+const AUDIO_CODEC_ID_OPUS = 21;
+
+type Transcript = { text: string; timestamp: number };
 
 function usePhotos(device: BluetoothRemoteGATTServer) {
 
@@ -119,8 +127,85 @@ function usePhotos(device: BluetoothRemoteGATTServer) {
     return [subscribed, photos] as const;
 }
 
+function useTranscripts(device: BluetoothRemoteGATTServer) {
+    const [transcripts, setTranscripts] = React.useState<Transcript[]>([]);
+
+    React.useEffect(() => {
+        let cancelled = false;
+        let pendingFrames: Uint8Array[] = [];
+        let transcribing = false;
+
+        const flush = async () => {
+            if (transcribing || pendingFrames.length < FRAMES_PER_SEGMENT) return;
+            transcribing = true;
+            const batch = pendingFrames;
+            pendingFrames = [];
+            try {
+                const wav = await opusFramesToWav(batch);
+                const text = await transcribeWavWithGroq(wav);
+                if (!cancelled && text) {
+                    setTranscripts((prev) => [...prev, { text, timestamp: Date.now() }]);
+                }
+            } catch (err) {
+                console.error('Transcription failed', err);
+            } finally {
+                transcribing = false;
+            }
+        };
+
+        (async () => {
+            try {
+                const service = await device.getPrimaryService(
+                    '19B10000-E8F2-537E-4F6C-D104768A1214'.toLowerCase(),
+                );
+
+                // Verify codec is Opus before subscribing.
+                try {
+                    const codecChar = await service.getCharacteristic(
+                        '19b10002-e8f2-537e-4f6c-d104768a1214',
+                    );
+                    const codecValue = await codecChar.readValue();
+                    const codecId = new Uint8Array(codecValue.buffer)[0];
+                    if (codecId !== AUDIO_CODEC_ID_OPUS) {
+                        console.warn(`Unexpected audio codec id ${codecId}; skipping STT pipeline`);
+                        return;
+                    }
+                } catch (err) {
+                    console.warn('Could not read audio codec characteristic', err);
+                    return;
+                }
+
+                const audioChar = await service.getCharacteristic(
+                    '19b10001-e8f2-537e-4f6c-d104768a1214',
+                );
+                await audioChar.startNotifications();
+                audioChar.addEventListener('characteristicvaluechanged', (e) => {
+                    if (cancelled) return;
+                    const value = (e.target as BluetoothRemoteGATTCharacteristic).value!;
+                    const array = new Uint8Array(value.buffer);
+                    if (array.length <= 3) return; // header only
+                    const opusFrame = array.slice(3);
+                    pendingFrames.push(opusFrame);
+                    if (pendingFrames.length >= FRAMES_PER_SEGMENT) {
+                        flush();
+                    }
+                });
+            } catch (err) {
+                console.error('Failed to set up audio subscription', err);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    return transcripts;
+}
+
 export const DeviceView = React.memo((props: { device: BluetoothRemoteGATTServer }) => {
     const [subscribed, photos] = usePhotos(props.device);
+    const transcripts = useTranscripts(props.device);
     const agent = React.useMemo(() => new Agent(), []);
     const agentState = agent.use();
     const [activePhotoIndex, setActivePhotoIndex] = React.useState<number | null>(null);
@@ -144,8 +229,8 @@ export const DeviceView = React.memo((props: { device: BluetoothRemoteGATTServer
 
     return (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            {/* Display photos in a grid filling the screen */}
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#111' }}>
+            {/* Photo grid: top 70% */}
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: '30%', backgroundColor: '#111' }}>
                 <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', padding: 5 }}>
                     {photos.slice().reverse().map((photo, index) => ( // Display newest first
                         <Pressable
@@ -178,6 +263,25 @@ export const DeviceView = React.memo((props: { device: BluetoothRemoteGATTServer
                                 </View>
                             )}
                         </Pressable>
+                    ))}
+                </ScrollView>
+            </View>
+
+            {/* Transcript panel: bottom 30% */}
+            <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '30%', backgroundColor: '#000', borderTopWidth: 1, borderTopColor: '#333' }}>
+                <Text style={{ color: '#888', fontSize: 11, padding: 6 }}>
+                    Transcripts ({transcripts.length})
+                </Text>
+                <ScrollView contentContainerStyle={{ padding: 8 }}>
+                    {transcripts.slice().reverse().map((t, i) => (
+                        <View key={transcripts.length - 1 - i} style={{ marginBottom: 6 }}>
+                            <Text style={{ color: '#666', fontSize: 10 }}>
+                                {new Date(t.timestamp).toLocaleTimeString()}
+                            </Text>
+                            <Text style={{ color: '#fff', fontSize: 13 }}>
+                                {t.text}
+                            </Text>
+                        </View>
                     ))}
                 </ScrollView>
             </View>
